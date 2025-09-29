@@ -1,4 +1,3 @@
-# pdf_extractor/services/gazette_nlp.py
 from __future__ import annotations
 from typing import Optional, List
 import unicodedata
