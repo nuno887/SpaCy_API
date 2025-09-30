@@ -14,7 +14,9 @@ class SumarioItem:
     text: str           # header line (raw)
     title: str          # short continuation (1–3 following lines)
     line_range: Tuple[int,int]
-    section_sumario: Optional[str] = None
+    section_sumario: Optional[str] = None        # kept for backward-compat (first org or single-line)
+    section_sumario_raw: Optional[str] = None    # full multi-line org block as seen in Sumário
+    section_orgs: Tuple[str, ...] = tuple()      # all orgs parsed from block (ordered)
 
 class SumarioParser:
     def __init__(self, nlp: GazetteNLP):
@@ -63,10 +65,10 @@ class SumarioParser:
     def _extract_kind_num_year(self, text: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
         # Run NLP and look for ents labeled by the ruler/NER
         doc = self.gnlp.nlp(text.strip())
-        # Head MUST start with KIND (first token(s) belong to a KIND span)
+        # Head MUST start with DOC_TYPE (first token(s) belong to a DOC_TYPE span)
         if not doc.ents:
             return None, None, None
-        first_ent = next((e for e in doc.ents if e.label_ == "KIND" and e.start == 0), None)
+        first_ent = next((e for e in doc.ents if e.label_ == "DOC_TYPE" and e.start == 0), None)
         if not first_ent:
             return None, None, None
 

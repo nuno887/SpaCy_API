@@ -30,14 +30,14 @@ class GazetteNLP:
             nlp.add_pipe("sentencizer")
         # bootstrap ruler so later you can replace with your trained NER
         ruler = nlp.add_pipe("entity_ruler", name="gazette_ruler", config={"overwrite_ents": True})
-        ruler.add_patterns(self._kind_patterns())
+        ruler.add_patterns(self._doctype_patterns())
         ruler.add_patterns(self._num_year_patterns())
         return nlp
 
-    def _kind_patterns(self) -> List[dict]:
-        # tag KIND on your controlled tipos (ASCII/lowercase matching via LOWER)
+    def _doctype_patterns(self) -> List[dict]:
+        # tag DOC_TYPE on your controlled tipos (ASCII/lowercase matching via LOWER)
         kinds = sorted(ALLOWED_TIPOS)
-        return [{"label":"KIND","pattern":[{"LOWER":k}]} for k in kinds]
+        return [{"label":"DOC_TYPE","pattern":[{"LOWER":k}]} for k in kinds]
 
     def _num_year_patterns(self) -> List[dict]:
         # DOC_NUM: numeric token(s) (we keep it simple; training can do better later)

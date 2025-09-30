@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import date
 from typing import List, Dict, Any, Optional
 
@@ -25,7 +25,10 @@ class Doc:
     _DataRelations: List[Relation] = field(default_factory=list)
 
     # Handy metadata (optional)
-    section_body: Optional[str] = None
+    section_body: Optional[str] = None       # owner org (first org from Sumário block)
+    section_body_raw: Optional[str] = None   #full multi-line Sumário block
+    section_orgs: List[str] = field(default_factory=list) #all orgs parsed from the block (ordered, deduped)
+
     header_text: Optional[str] = None
     provenance: Optional[Provenance] = None
     quality_flags: List[str] = field(default_factory=list)
@@ -55,13 +58,15 @@ class Doc:
             "_BodyTexto": self._BodyTexto,
             "_BodySumario": self._BodySumario,
             "_DataDate": self._DataDate.isoformat() if self._DataDate else None,
-            "_Entidade": [vars(o) for o in self._Entidade],
-            "_DataEntidades": [vars(o) for o in self._DataEntidades],
-            "_DataPessoas": [vars(p) for p in self._DataPessoas],
-            "_DataRelations": [vars(r) for r in self._DataRelations],
+            "_Entidade": [asdict(o) for o in self._Entidade],
+            "_DataEntidades": [asdict(o) for o in self._DataEntidades],
+            "_DataPessoas": [asdict(p) for p in self._DataPessoas],
+            "_DataRelations": [asdict(r) for r in self._DataRelations],
             "section_body": self.section_body,
+            "section_body_raw": self.section_body_raw,
+            "section_orgs": list(self.section_orgs),
             "header_text": self.header_text,
-            "provenance": vars(self.provenance) if self.provenance else None,
+            "provenance": asdict(self.provenance) if self.provenance else None,
             "quality_flags": list(self.quality_flags),
         }
 
@@ -86,6 +91,8 @@ class Doc:
             _DataPessoas=[map_person(x) for x in d.get("_DataPessoas",[])],
             _DataRelations=[map_rel(x) for x in d.get("_DataRelations",[])],
             section_body=d.get("section_body"),
+            section_body_raw=d.get("section_body_raw"),
+            section_orgs=list(d.get("section_orgs", [])),
             header_text=d.get("header_text"),
             provenance=prov,
             quality_flags=list(d.get("quality_flags",[])),

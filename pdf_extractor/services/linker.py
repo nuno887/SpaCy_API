@@ -9,14 +9,15 @@ from .slicer import BodySlice
 @dataclass(frozen=True, slots=True)
 class LinkResult:
     item: Optional[SumarioItem]
-    slice: BodySlice
+    slice: Optional[BodySlice]  # None when body anchor not found
     status: Literal["matched","fallback","unmatched"]
     reason: Optional[str] = None
 
 class Linker:
     def link(self, items: List[SumarioItem], slices: List[BodySlice]) -> List[LinkResult]:
         if not slices:
-            return []
+            # No body anchors available; return all items as unanchored
+            return [LinkResult(item=it, slice=None, status="unanchored", reasn="no_body_headers") for it in items]
 
         results: List[LinkResult] = []
         used: set[int] = set()

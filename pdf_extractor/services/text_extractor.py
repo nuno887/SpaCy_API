@@ -1,7 +1,6 @@
 # pdf_extractor/services/text_extractor.py
 from __future__ import annotations
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List, Optional
 import io
 import os
@@ -22,11 +21,11 @@ class TextExtractionResult:
 
 class TextExtractor:
     """
-    Extracts text from a PDF:
+    Extracts text from a PDF (bytes):
       - Optionally ignores the top N% of each page (to drop headers)
       - Optionally skips the last page entirely
       - Tries digital text first; falls back to OCR if text is empty/very short
-      - Special case for page 2: if it looks like mixed one-col header + two-col body, force OCR 
+      - Special case for page 2: if it looks like mixed one-col header + two-col body, force OCR
     """
 
     def __init__(
@@ -50,36 +49,46 @@ class TextExtractor:
         if tessdata_prefix:
             os.environ["TESSDATA_PREFIX"] = tessdata_prefix
 
-   
-    
-    # Para FastApi, não cria .txt files like the "extract"
-def extract_from_bytes(self, pdf_bytes: bytes) -> TextExtractionResult:
-    import fitz, io
-    notes: list[str] = []
-    ocr_pages: list[int] = []
-    page_texts: list[str] = []
+    # Single public entrypoint for API usage (bytes only)
+    def extract(self, pdf_bytes: bytes) -> TextExtractionResult:
+        notes: List[str] = []
+        ocr_pages: List[int] = []
+        page_texts: List[str] = []
 
-    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-        last_index = doc.page_count - 1
-        effective_last = last_index - 1 if (self.skip_last_page and doc.page_count >= 1) else last_index
-        if effective_last < 0:
-            return TextExtractionResult(pdf_name="upload.pdf", pages=[], combined="", ocr_pages=[], notes=["no pages"])
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            last_index = doc.page_count - 1
+            effective_last = last_index - 1 if (self.skip_last_page and doc.page_count >= 1) else last_index
+            if effective_last < 0:
+                return TextExtractionResult(
+                    pdf_name="upload.pdf", pages=[], combined="", ocr_pages=[], notes=["no pages"]
+                )
 
-        for i in range(0, effective_last + 1):
-            page = doc[i]
-            clip = self._page_clip_rect(page, i, self.ignore_top_percent)
-            force_ocr = (i == 1) and self._should_force_ocr_page2(page, clip)
-            if force_ocr:
-                txt = self._extract_text_ocr(page, clip); ocr_pages.append(i); notes.append("forced OCR on page 2")
-            else:
-                txt = self._extract_text_digital(page, clip)
-                if len(txt) < self.min_digital_chars:
-                    txt = self._extract_text_ocr(page, clip); ocr_pages.append(i)
-            page_texts.append(txt)
+            for i in range(0, effective_last + 1):
+                page = doc[i]
+                clip = self._page_clip_rect(page, i, self.ignore_top_percent)
 
-    combined = "\n\n".join(page_texts)
-    return TextExtractionResult(pdf_name="upload.pdf", pages=page_texts, combined=combined, ocr_pages=ocr_pages, notes=notes)
+                # special case: page 2 (index 1) that looks 1-col header + 2-col body
+                force_ocr = (i == 1) and self._should_force_ocr_page2(page, clip)
+                if force_ocr:
+                    txt = self._extract_text_ocr(page, clip)
+                    ocr_pages.append(i)
+                    notes.append("forced OCR on page 2")
+                else:
+                    txt = self._extract_text_digital(page, clip)
+                    if len(txt) < self.min_digital_chars:
+                        txt = self._extract_text_ocr(page, clip)
+                        ocr_pages.append(i)
 
+                page_texts.append(txt)
+
+        combined = "\n\n".join(page_texts)
+        return TextExtractionResult(
+            pdf_name="upload.pdf",
+            pages=page_texts,
+            combined=combined,
+            ocr_pages=ocr_pages,
+            notes=notes,
+        )
 
     # ---------- helpers ----------
     def _page_clip_rect(self, page: fitz.Page, page_index: int, ignore_top_fraction: float) -> fitz.Rect:
@@ -99,8 +108,12 @@ def extract_from_bytes(self, pdf_bytes: bytes) -> TextExtractionResult:
         try:
             return pytesseract.image_to_string(img, lang=self.ocr_lang).strip()
         except Exception:
-            # fallback without explicit lang
-            return pytesseract.image_to_string(img).strip()
+            try:
+                # fallback without explicit lang
+                return pytesseract.image_to_string(img).strip()
+            except Exception:
+                # last resort: don't crash if tesseract is unavailable
+                return ""
 
     def _should_force_ocr_page2(self, page: fitz.Page, clip: fitz.Rect) -> bool:
         """

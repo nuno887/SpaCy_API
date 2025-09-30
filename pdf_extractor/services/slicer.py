@@ -21,13 +21,13 @@ class BodySlicer:
 
     def _extract_kind_num_year(self, line: str) -> tuple[Optional[str], Optional[str], Optional[str], int]:
         """Return (tipo, number, year, last_token_idx_of_header_part) if line looks like a header,
-        else (None, None, None, -1). Header must START with KIND."""
+        else (None, None, None, -1). Header must START with DOC_TYPE."""
         doc = self.gnlp.nlp(line.strip())
         if not doc.ents:
             return None, None, None, -1
 
         # KIND must start at token 0
-        kind_ent = next((e for e in doc.ents if e.label_ == "KIND" and e.start == 0), None)
+        kind_ent = next((e for e in doc.ents if e.label_ == "DOC_TYPE" and e.start == 0), None)
         if not kind_ent:
             return None, None, None, -1
 
