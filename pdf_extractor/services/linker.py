@@ -10,14 +10,14 @@ from .slicer import BodySlice
 class LinkResult:
     item: Optional[SumarioItem]
     slice: Optional[BodySlice]  # None when body anchor not found
-    status: Literal["matched","fallback","unmatched"]
+    status: Literal["matched","unmatched"]
     reason: Optional[str] = None
 
 class Linker:
     def link(self, items: List[SumarioItem], slices: List[BodySlice]) -> List[LinkResult]:
         if not slices:
             # No body anchors available; return all items as unanchored
-            return [LinkResult(item=it, slice=None, status="unanchored", reasn="no_body_headers") for it in items]
+            return [LinkResult(item=it, slice=None, status="unanchored", reason="no_body_headers") for it in items]
 
         results: List[LinkResult] = []
         used: set[int] = set()
@@ -41,14 +41,10 @@ class Linker:
                 used.add(anchor)
                 results.append(LinkResult(item=it, slice=slices[anchor], status="matched"))
             else:
-                # no exact body anchor found
-                pass
+                #no body anchor found -> keep the Sumário item (no fallback body-only docs)
+                results.append(LinkResult(item=it, slice=None, status="unmatched", reason="no_body_anchor"))
 
-        # 2) Any remaining slices become fallback docs (no Sumário match)
-        for i, sl in enumerate(slices):
-            if i not in used:
-                results.append(LinkResult(item=None, slice=sl, status="fallback", reason="no_sumario_match"))
 
-        # Keep global body order
-        results.sort(key=lambda r: r.slice.start_line)
+        # Keep body order for matched; unmatched go last (preserve Sumário order)
+        results.sort(key=lambda r: (r.slice.start_line if r.slice else 10**9))
         return results

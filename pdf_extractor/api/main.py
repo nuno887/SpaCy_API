@@ -50,3 +50,5 @@ async def extract_pdf(
 
 if __name__ == "__main__":
     uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+    
+# uvicorn pdf_extractor.api.main:app --reload --host 0.0.0.0 --port 8000
