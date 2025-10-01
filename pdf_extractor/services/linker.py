@@ -6,6 +6,8 @@ from typing import List, Optional, Literal, Dict, Tuple
 from .sumario import SumarioItem
 from .slicer import BodySlice
 
+import logging
+
 @dataclass(frozen=True, slots=True)
 class LinkResult:
     item: Optional[SumarioItem]
@@ -28,7 +30,9 @@ class Linker:
             key = ((sl.kind or "unknown"), (sl.number or None), (sl.year or None))
             index.setdefault(key, []).append(i)
 
-        # 1) Try to match each Sumário item to a unique slice
+        # 1) Try to match each Sumário item to a unique slice (by doc_name)
+
+        logging.info(f"[LINK] sumario_items={len(items)} body_slices={len(slices)}")
         for it in items:
             key = (it.tipo or "unknown", it.number or None, it.year or None)
             candidates = index.get(key, [])
@@ -39,9 +43,12 @@ class Linker:
                     break
             if anchor is not None:
                 used.add(anchor)
-                results.append(LinkResult(item=it, slice=slices[anchor], status="matched"))
+                sl = slices[anchor]
+                logging.info(f"[LINK] MATCH doc='{it.doc_name}' -> slice[{anchor}] lines = [{sl.start_line}:{sl.end_line}]")
+                results.append(LinkResult(item=it, slice=sl, status= "matched"))
             else:
                 #no body anchor found -> keep the Sumário item (no fallback body-only docs)
+                logging.info(f"[LINK] UNMATCHED doc='{it.doc_name}' (no anchor)")
                 results.append(LinkResult(item=it, slice=None, status="unmatched", reason="no_body_anchor"))
 
 

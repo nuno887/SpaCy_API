@@ -32,6 +32,7 @@ class GazetteNLP:
         ruler = nlp.add_pipe("entity_ruler", name="gazette_ruler", config={"overwrite_ents": True})
         ruler.add_patterns(self._doctype_patterns())
         ruler.add_patterns(self._num_year_patterns())
+        ruler.add_patterns(self._sum_org_line_patterns())
         return nlp
 
     def _doctype_patterns(self) -> List[dict]:
@@ -59,15 +60,22 @@ class GazetteNLP:
             {"IS_ALPHA":True, "IS_UPPER":True, "OP":"+"},
         ]])
 
+
+    def _sum_org_line_patterns(self) -> List[dict]:
+        #Coarse rule: one or more UPPERCASE alpha tokens; allow hyphenated forms as separate tokens
+        return [
+            {"label": "SUM_ORG_LINE", "pattern":[{"IS_ALPHA":True, "IS_UPPER":True, "OP":"+"}]},
+            {"label": "SUM_ORG_LINE", "pattern":[
+                {"IS_ALPHA":True, "IS_UPPER":True, "OP":"+"},
+                {"TEXT":"-"},
+                {"IS_ALPHA":True, "IS_UPPER":True, "OP":"+"}
+            ]}
+        ]
+
     # helpers
-    def is_org_heading(self, text: str) -> bool:
-        doc = self.nlp.make_doc(text.strip())
-        matches = self.matcher(doc)
-        # Heuristic: treat as org heading if match exists and the line has letters and mostly uppercase
-        if not matches:
+    def is_org_heading(self, text:str) -> bool:
+        t = text.strip()
+        if not t:
             return False
-        letters = [ch for ch in text if ch.isalpha()]
-        if not letters:
-            return False
-        upp = sum(1 for ch in letters if ch.isupper())
-        return upp / max(1, len(letters)) > 0.75
+        doc = self.nlp(t)
+        return any(ent.label_ == "SUM_ORG_LINE" for ent in doc.ents)

@@ -4,6 +4,8 @@ from typing import List, Optional, Tuple
 
 from .gazette_nlp import GazetteNLP
 
+import logging
+
 @dataclass(frozen=True, slots=True)
 class BodySlice:
     start_line: int
@@ -18,6 +20,11 @@ class BodySlice:
 class BodySlicer:
     def __init__(self, nlp: GazetteNLP):
         self.gnlp = nlp
+    
+    #Back-compat: some callers still use ´endline´ (without underscore)
+    @property
+    def endline(self) -> int:
+        return self.end_line
 
     def _extract_kind_num_year(self, line: str) -> tuple[Optional[str], Optional[str], Optional[str], int]:
         """Return (tipo, number, year, last_token_idx_of_header_part) if line looks like a header,
@@ -26,10 +33,12 @@ class BodySlicer:
         if not doc.ents:
             return None, None, None, -1
 
-        # KIND must start at token 0
-        kind_ent = next((e for e in doc.ents if e.label_ == "DOC_TYPE" and e.start == 0), None)
+        # KIND must be the first *alphabetic* content on the line (allow leading punctuation/space)
+        kind_ent = None
+        # Any DOC_TYPE on the line counts as a header
+        kind_ent = next((e for e in doc.ents if e.label_ == "DOC_TYPE"), None)
         if not kind_ent:
-            return None, None, None, -1
+            return None,None, None, -1
 
         # collect num/year within this sentence
         num = None; year = None
@@ -43,13 +52,10 @@ class BodySlicer:
         # expand last_idx to include following num/year tokens if they exist
         if num or year:
             # find rightmost entity among KIND/NUM/YEAR
-            rightmost_end = max([kind_ent.end] + [e.end for e in doc.ents if e.label_ in ("DOC_NUM","DOC_YEAR")], default=kind_ent.end)
+            rightmost_end = [kind_ent.end] + [e.end for e in doc.ents if e.label_ in ("DOC_NUM","DOC_YEAR")]
+            rightmost_end = max(rightmost_end)
             last_idx = rightmost_end - 1
 
-        # header purity: after last_idx there should be no alphanum tokens (allow punctuation only)
-        for t in doc[last_idx+1:]:
-            if t.is_alpha or any(ch.isdigit() for ch in t.text):
-                return None, None, None, -1
 
         tipo = doc[kind_ent.start:kind_ent.end].text.lower().strip()
         return tipo, num, year, last_idx
@@ -75,9 +81,15 @@ class BodySlicer:
             tipo, num, year, last_idx = self._extract_kind_num_year(raw)
             if tipo:
                 headers.append(i)
+        
+        #debug print
+        logging.info(f"[SLICER] detect_headers -> {len(headers)} headers")
+        for idx in headers[:50]:
+            logging.info(f"[SLICER] header_line={idx} text='{lines[idx].strip()[:120].replace(chr(10),' ')}'")
+
         return headers
 
-    def slices(self, lines: List[str], header_lines: List[int]) -> List[BodySlice]:
+    def slices(self, lines: List[str], header_lines: List[int],exclude_range: Optional[Tuple[int,int]] = None) -> List[BodySlice]:
         if not header_lines:
             return []
         header_lines = sorted(set(header_lines))
@@ -108,6 +120,8 @@ class BodySlicer:
                 section_body=section,
                 kind=tipo,
                 number=num,
-                year=year
+                year=year,
             ))
+        #debug print
+        logging.info(f"[slicer] slices build: {len(slices)}")
         return slices

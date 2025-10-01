@@ -35,3 +35,19 @@ class Relation:
     predicate: str
     object: ObjectT
     evidence_span: Optional[Span] = None
+
+@dataclass(frozen= True, slots=True)
+class SumarioDoc:
+    doc_name: str   # normalized key, e.g. "despacho 216/2025"
+    header_text: str    # raw Sumário header line
+    title: str  # ALL lines until next item/org (joined with "\n")
+    orgs: Tuple[str, ...] = ()  # all orgs parsed from the Sumário block (first = owner)
+    org_block_raw: Optional[str] = None
+
+    @property
+    def primary_org(self) -> Optional[str]:
+        return self.orgs[0] if self.orgs else None
+
+    @property
+    def text(self) -> str:
+        return (self.header_text + ("\n" + self.title if self.title else "")).strip()

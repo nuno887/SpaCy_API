@@ -31,7 +31,7 @@ class DocFactory:
         body_texto = sl.text if sl else ""
         body_sumario =" ".join([s for s in ([it.text] if it else []) + ([it.title] if it and it.title else [])]).strip()
 
-        prov = Provenance(body_line_range=((sl.start_line, sl.endline) if sl else (it.line_range if it else None)))
+        prov = Provenance(body_line_range=((sl.start_line, sl.end_line) if sl else (it.line_range if it else None)))
 
         quality = []
         if link.status == "matched":

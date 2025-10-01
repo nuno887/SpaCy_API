@@ -14,6 +14,8 @@ from .factory import DocFactory
 
 import logging
 
+DEBUG_PRINTS = True
+
 class Pipeline:
     """Holds long-lived components (spaCy etc.) and runs the in-memory pipeline per request."""
     def __init__(self, cfg: Config):
@@ -45,6 +47,26 @@ class Pipeline:
             sum_start, sum_end = self.sumario.find_range(lines)
             sum_lines = lines[sum_start:sum_end] if (sum_start is not None and sum_end is not None) else []
             items = self.sumario.parse_items(sum_lines)
+
+            if DEBUG_PRINTS:
+                rng = f"{sum_start}..{(sum_end-1) if (sum_start is not None and sum_end is not None ) else 'N/A'}"
+                logging.info(f"[SUMARIO] range: {rng}, items: {len(items)}")
+                for idx, it in enumerate(items[:50], 1): # cap output
+                    # support both SumarioItem (tipo/number/year) and SumarioDoc (doc_name)
+                    doc_name = getattr(it, "doc_name", None)
+                    if not doc_name:
+                        t = getattr(it, "tipo", "") or ""
+                        n = getattr(it, "number", "") or ""
+                        y = getattr(it, "year", "") or ""
+                        if n and y:
+                            doc_name = f"{t} {n}/{y}"
+                        elif n:
+                            doc_name = f"{t} {n}"
+                        else:
+                            doc_name = t
+                    primary_org = getattr(it, "primary_org", None) or getattr(it, "section_sumario", None)
+                    logging.info(f"[SUMARIO] {idx:02d} doc='{doc_name}' org='{primary_org}' header='{it.text[:120].replace(chr(10),' ')}'")
+                            
         
         except Exception as e:
             logging.exception("stage:sumario failed")
@@ -53,10 +75,17 @@ class Pipeline:
         try:      
             exclude = (sum_start, sum_end) if (sum_start is not None and sum_end is not None) else None
             header_lines = self.slicer.detect_headers(lines, exclude)
-            slices = self.slicer.slices(lines, header_lines)
+            slices = self.slicer.slices(lines, header_lines, exclude)
+
+            if DEBUG_PRINTS:
+                logging.info(f"[SLICER] headers detected: {len(header_lines)}; slices build: {len(slices)}")
+                for i, sl in enumerate(slices[:50], 1): # cap output
+                    dn = getattr(sl, "doc_name", None)
+                    logging.info(f"[SLICER] {i:02d} lines=[{sl.start_line}:{sl.end_line}] doc = '{dn}' org='{sl.section_body}' header='{sl.header_text[:120].replace(chr(10),' ')}'")
+
         except Exception as e:
             logging.exception("stage:slicing failed")
-            raise RuntimeError(f"stage:slicing -> {e.__class__.__name}: {e}") from e
+            raise RuntimeError(f"stage:slicing -> {e.__class__.__name__}: {e}") from e
         
         try:
         
